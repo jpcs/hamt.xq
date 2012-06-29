@@ -21,7 +21,7 @@ declare default function namespace "http://snelson.org.uk/functions/hamt";
 import module namespace data = "http://snelson.org.uk/functions/data" at "lib/data.xq";
 
 declare %private variable $hamt:width := 32;
-declare %private variable $hamt:split := 32;
+declare %private variable $hamt:split := 16;
 
 declare %private variable $hamt:type := data:declare(
 <HAMT>
@@ -35,9 +35,6 @@ declare %private variable $hamt:seq := $hamt:type[2];
 declare %private variable $hamt:index := $hamt:type[3];
 declare %private function seq($values) { $hamt:seq($values) };
 declare %private function index($children) { $hamt:index($children) };
-
-declare %private function seqval($k,$hash) { function() { $hash,$k } };
-declare %private function seqval-k($v) { fn:tail($v()) };
 
 declare function is($hamt)
 {
@@ -55,32 +52,32 @@ declare function create() { $hamt:empty };
 declare function put($hf,$eq,$hamt,$k)
 {
   type-check($hamt),
-  put-helper($eq,$hamt,$k,$hf($k))
+  put-helper($hf,$eq,$hamt,$k,$hf($k))
 };
 
-declare %private function put-helper($eq,$hamt,$k,$hash)
+declare %private function put-helper($hf,$eq,$hamt,$k,$hash)
 {
   data:match($hamt,
     (: Empty :) function() {
-      seq(seqval($k,$hash))
+      seq($k)
     },
     (: Seq :) function($values) {
       if(fn:count($values) eq $hamt:split) then
         fn:fold-left(function($hamt,$v) {
-          let $p := $v()
-          return put-helper($eq,$hamt,fn:tail($p),fn:head($p))
+          put-helper($hf,$eq,$hamt,$v,$hf($v))
         },$hamt:empty-index,$values)
-          ! put-helper($eq,.,$k,$hash)
-      else seq((seqval($k,$hash), $values[fn:not($eq(seqval-k(.),$k))]))
+          ! put-helper($hf,$eq,.,$k,$hash)
+      else seq(($k, $values[fn:not($eq(.,$k))]))
     },
     (: Index :) function($children) {
       index(
         let $i := ($hash mod $hamt:width) + 1
         let $hashleft := $hash idiv $hamt:width
+        let $newhf := function($v) { $hf($v) idiv $hamt:width }
         for $c at $p in $children
         return
           if($p ne $i) then $c
-          else put-helper($eq,$c,$k,$hashleft)
+          else put-helper($newhf,$eq,$c,$k,$hashleft)
       )
     }
   )
@@ -97,7 +94,7 @@ declare %private function delete-helper($eq,$hamt,$k,$hash)
   data:match($hamt,
     (: Empty :) function() { $hamt:empty },
     (: Seq :) function($values) {
-      let $newvalues := $values[fn:not($eq(seqval-k(.),$k))]
+      let $newvalues := $values[fn:not($eq(.,$k))]
       return if(fn:empty($newvalues)) then $hamt:empty else seq($newvalues)
     },
     (: Index :) function($children) {
@@ -130,9 +127,7 @@ declare %private function get-helper($eq,$hamt,$k,$hash)
   data:match($hamt,
     (: Empty :) function() { () },
     (: Seq :) function($values) {
-      fn:map(function($v) {
-        seqval-k($v)[$eq(.,$k)]
-      },$values)
+      $values[$eq(.,$k)]
     },
     (: Index :) function($children) {
       let $i := ($hash mod $hamt:width) + 1
@@ -158,7 +153,7 @@ declare %private function fold-helper($f,$z,$hamt)
 {
   data:match($hamt,
     (: Empty :) function() { $z },
-    (: Seq :) fn:fold-left(function($z,$v) { $f($z,seqval-k($v)) },$z,?),
+    (: Seq :) fn:fold-left($f,$z,?),
     (: Index :) fn:fold-left(fold-helper($f,?,?),$z,?)
   )
 };
