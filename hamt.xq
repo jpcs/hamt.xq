@@ -18,27 +18,25 @@ xquery version "3.0";
 
 module namespace hamt = "http://snelson.org.uk/functions/hamt";
 declare default function namespace "http://snelson.org.uk/functions/hamt";
-import module namespace data = "http://snelson.org.uk/functions/data" at "lib/data.xq";
 
 declare %private variable $hamt:width := 32;
 declare %private variable $hamt:split := 16;
 
-declare %private variable $hamt:type := data:declare(
-<HAMT>
-  <Empty/>
-  <Seq><data:Sequence/></Seq>
-  <Index><HAMT occurrence="*"/></Index>
-</HAMT>, (: type check :)fn:false());
-declare %private variable $hamt:empty := $hamt:type[1]();
-declare %private variable $hamt:empty-index := index((1 to $hamt:width) ! $hamt:empty);
-declare %private variable $hamt:seq := $hamt:type[2];
-declare %private variable $hamt:index := $hamt:type[3];
-declare %private function seq($values) { $hamt:seq($values) };
-declare %private function index($children) { $hamt:index($children) };
+declare %private variable $hamt:empty := function($empty,$seq,$index) { $empty() };
+declare %private variable $hamt:empty-index-children := (1 to $hamt:width) ! $hamt:empty;
+declare %private variable $hamt:empty-index := function($empty,$seq,$index) { $index($hamt:empty-index-children) };
+declare %private function seq($values) { function($empty,$seq,$index) { $seq($values) } };
+declare %private function index($children) { function($empty,$seq,$index) { $index($children) } };
 
 declare function is($hamt)
 {
-  fn:node-name(data:type($hamt)/..) eq xs:QName("HAMT")
+  try {
+    $hamt(
+      (: Empty :) fn:true#0,
+      (: Seq :) function($a) { fn:true() },
+      (: Index :) function($a) { fn:true() }
+    )
+  } catch * { fn:false() }
 };
 
 declare function type-check($hamt)
@@ -57,7 +55,7 @@ declare function put($hf,$eq,$hamt,$k)
 
 declare %private function put-helper($hf,$eq,$hamt,$k,$hash)
 {
-  data:match($hamt,
+  $hamt(
     (: Empty :) function() {
       seq($k)
     },
@@ -91,7 +89,7 @@ declare function delete($hf,$eq,$hamt,$k)
 
 declare %private function delete-helper($eq,$hamt,$k,$hash)
 {
-  data:match($hamt,
+  $hamt(
     (: Empty :) function() { $hamt:empty },
     (: Seq :) function($values) {
       let $newvalues := $values[fn:not($eq(.,$k))]
@@ -124,7 +122,7 @@ declare function contains($hf,$eq,$hamt,$k)
 
 declare %private function get-helper($eq,$hamt,$k,$hash)
 {
-  data:match($hamt,
+  $hamt(
     (: Empty :) function() { () },
     (: Seq :) function($values) {
       $values[$eq(.,$k)]
@@ -140,7 +138,22 @@ declare %private function get-helper($eq,$hamt,$k,$hash)
 declare function describe($hamt)
 {
   type-check($hamt),
-  data:describe($hamt)
+  describe-helper($hamt,0)
+};
+
+declare %private function describe-helper($hamt,$indent)
+{
+  $hamt(
+    (: Empty :) function() { "[Empty]" },
+    (: Seq :) function($values) {
+      "[Seq (" || fn:string-join($values ! ('"' || fn:string(.) || '"'),", ") || ")]"
+    },
+    (: Index :) function($children) {
+      "[Index" || $children ! (
+        "&#xa;" || fn:string-join(((1 to $indent) ! "  ")) || describe-helper(.,$indent + 1))
+      || "]"
+    }
+  )
 };
 
 declare function fold($f,$z,$hamt)
@@ -151,7 +164,7 @@ declare function fold($f,$z,$hamt)
 
 declare %private function fold-helper($f,$z,$hamt)
 {
-  data:match($hamt,
+  $hamt(
     (: Empty :) function() { $z },
     (: Seq :) fn:fold-left($f,$z,?),
     (: Index :) fn:fold-left(fold-helper($f,?,?),$z,?)
@@ -166,7 +179,7 @@ declare function count($hamt)
 
 declare %private function count-helper($hamt)
 {
-  data:match($hamt,
+  $hamt(
     (: Empty :) function() { 0 },
     (: Seq :) fn:count#1,
     (: Index :) fn:fold-left(function($z,$c) { $z + count-helper($c) },0,?)
@@ -181,7 +194,7 @@ declare function empty($hamt)
 
 declare %private function empty-helper($hamt)
 {
-  data:match($hamt,
+  $hamt(
     (: Empty :) fn:true#0,
     (: Seq :) fn:empty#1,
     (: Index :) fn:fold-left(function($z,$c) { $z and empty-helper($c) },fn:true(),?)
