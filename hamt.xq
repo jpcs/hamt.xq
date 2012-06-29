@@ -28,7 +28,7 @@ declare %private variable $hamt:empty-index := function($empty,$leaf,$index) { $
 declare %private function leaf($values) { function($empty,$leaf,$index) { $leaf($values) } };
 declare %private function index($children) { function($empty,$leaf,$index) { $index($children) } };
 
-declare function is($hamt)
+declare function is($hamt as item()) as xs:boolean
 {
   try {
     $hamt(
@@ -39,15 +39,20 @@ declare function is($hamt)
   } catch * { fn:false() }
 };
 
-declare function type-check($hamt)
+declare %private function type-check($hamt)
 {
   if(is($hamt)) then () else
   fn:error(xs:QName("hamt:BADTYPE"),"Not a HAMT value")
 };
 
-declare function create() { $hamt:empty };
+declare function create() as item() { $hamt:empty };
 
-declare function put($hf,$eq,$hamt,$k)
+declare function put(
+  $hf as function(item()) as xs:integer,
+  $eq as function(item(),item()) as xs:boolean,
+  $hamt as item(),
+  $k as item()
+) as item()
 {
   type-check($hamt),
   put-helper($hf,$eq,$hamt,$k,$hf($k))
@@ -81,7 +86,12 @@ declare %private function put-helper($hf,$eq,$hamt,$k,$hash)
   )
 };
 
-declare function delete($hf,$eq,$hamt,$k)
+declare function delete(
+  $hf as function(item()) as xs:integer,
+  $eq as function(item(),item()) as xs:boolean,
+  $hamt as item(),
+  $k as item()
+) as item()
 {
   type-check($hamt),
   delete-helper($eq,$hamt,$k,$hf($k))
@@ -109,13 +119,23 @@ declare %private function delete-helper($eq,$hamt,$k,$hash)
   )
 };
 
-declare function get($hf,$eq,$hamt,$k)
+declare function get(
+  $hf as function(item()) as xs:integer,
+  $eq as function(item(),item()) as xs:boolean,
+  $hamt as item(),
+  $k as item()
+) as item()?
 {
   type-check($hamt),
   get-helper($eq,$hamt,$k,$hf($k))
 };
 
-declare function contains($hf,$eq,$hamt,$k)
+declare function contains(
+  $hf as function(item()) as xs:integer,
+  $eq as function(item(),item()) as xs:boolean,
+  $hamt as item(),
+  $k as item()
+) as xs:boolean
 {
   fn:exists(get($hf,$eq,$hamt,$k))
 };
@@ -135,7 +155,9 @@ declare %private function get-helper($eq,$hamt,$k,$hash)
   )
 };
 
-declare function describe($hamt)
+declare function describe(
+  $hamt as item()
+) as xs:string
 {
   type-check($hamt),
   describe-helper($hamt,0)
@@ -156,7 +178,11 @@ declare %private function describe-helper($hamt,$indent)
   )
 };
 
-declare function fold($f,$z,$hamt)
+declare function fold(
+  $f as function(item()*,item()) as item()*,
+  $z as item()*,
+  $hamt as item()
+) as item()*
 {
   type-check($hamt),
   fold-helper($f,$z,$hamt)  
@@ -171,7 +197,9 @@ declare %private function fold-helper($f,$z,$hamt)
   )
 };
 
-declare function count($hamt)
+declare function count(
+  $hamt as item()
+) as xs:integer
 {
   type-check($hamt),
   count-helper($hamt)  
@@ -186,7 +214,9 @@ declare %private function count-helper($hamt)
   )
 };
 
-declare function empty($hamt)
+declare function empty(
+  $hamt as item()
+) as xs:boolean
 {
   type-check($hamt),
   empty-helper($hamt)
