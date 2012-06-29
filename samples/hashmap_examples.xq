@@ -1,4 +1,4 @@
-xquery version "1.0-ml";
+xquery version "3.0";
 
 (:
  : Copyright (c) 2010-2012 John Snelson
