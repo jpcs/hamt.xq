@@ -22,18 +22,18 @@ declare default function namespace "http://snelson.org.uk/functions/hamt";
 declare %private variable $hamt:width := 32;
 declare %private variable $hamt:split := 16;
 
-declare %private variable $hamt:empty := function($empty,$seq,$index) { $empty() };
+declare %private variable $hamt:empty := function($empty,$leaf,$index) { $empty() };
 declare %private variable $hamt:empty-index-children := (1 to $hamt:width) ! $hamt:empty;
-declare %private variable $hamt:empty-index := function($empty,$seq,$index) { $index($hamt:empty-index-children) };
-declare %private function seq($values) { function($empty,$seq,$index) { $seq($values) } };
-declare %private function index($children) { function($empty,$seq,$index) { $index($children) } };
+declare %private variable $hamt:empty-index := function($empty,$leaf,$index) { $index($hamt:empty-index-children) };
+declare %private function leaf($values) { function($empty,$leaf,$index) { $leaf($values) } };
+declare %private function index($children) { function($empty,$leaf,$index) { $index($children) } };
 
 declare function is($hamt)
 {
   try {
     $hamt(
       (: Empty :) fn:true#0,
-      (: Seq :) function($a) { fn:true() },
+      (: Leaf :) function($a) { fn:true() },
       (: Index :) function($a) { fn:true() }
     )
   } catch * { fn:false() }
@@ -57,15 +57,15 @@ declare %private function put-helper($hf,$eq,$hamt,$k,$hash)
 {
   $hamt(
     (: Empty :) function() {
-      seq($k)
+      leaf($k)
     },
-    (: Seq :) function($values) {
+    (: Leaf :) function($values) {
       if(fn:count($values) eq $hamt:split) then
         fn:fold-left(function($hamt,$v) {
           put-helper($hf,$eq,$hamt,$v,$hf($v))
         },$hamt:empty-index,$values)
           ! put-helper($hf,$eq,.,$k,$hash)
-      else seq(($k, $values[fn:not($eq(.,$k))]))
+      else leaf(($k, $values[fn:not($eq(.,$k))]))
     },
     (: Index :) function($children) {
       index(
@@ -91,9 +91,9 @@ declare %private function delete-helper($eq,$hamt,$k,$hash)
 {
   $hamt(
     (: Empty :) function() { $hamt:empty },
-    (: Seq :) function($values) {
+    (: Leaf :) function($values) {
       let $newvalues := $values[fn:not($eq(.,$k))]
-      return if(fn:empty($newvalues)) then $hamt:empty else seq($newvalues)
+      return if(fn:empty($newvalues)) then $hamt:empty else leaf($newvalues)
     },
     (: Index :) function($children) {
       let $newindex := index(
@@ -124,7 +124,7 @@ declare %private function get-helper($eq,$hamt,$k,$hash)
 {
   $hamt(
     (: Empty :) function() { () },
-    (: Seq :) function($values) {
+    (: Leaf :) function($values) {
       $values[$eq(.,$k)]
     },
     (: Index :) function($children) {
@@ -145,8 +145,8 @@ declare %private function describe-helper($hamt,$indent)
 {
   $hamt(
     (: Empty :) function() { "[Empty]" },
-    (: Seq :) function($values) {
-      "[Seq (" || fn:string-join($values ! ('"' || fn:string(.) || '"'),", ") || ")]"
+    (: Leaf :) function($values) {
+      "[Leaf (" || fn:string-join($values ! ('"' || fn:string(.) || '"'),", ") || ")]"
     },
     (: Index :) function($children) {
       "[Index" || $children ! (
@@ -166,7 +166,7 @@ declare %private function fold-helper($f,$z,$hamt)
 {
   $hamt(
     (: Empty :) function() { $z },
-    (: Seq :) fn:fold-left($f,$z,?),
+    (: Leaf :) fn:fold-left($f,$z,?),
     (: Index :) fn:fold-left(fold-helper($f,?,?),$z,?)
   )
 };
@@ -181,7 +181,7 @@ declare %private function count-helper($hamt)
 {
   $hamt(
     (: Empty :) function() { 0 },
-    (: Seq :) fn:count#1,
+    (: Leaf :) fn:count#1,
     (: Index :) fn:fold-left(function($z,$c) { $z + count-helper($c) },0,?)
   )
 };
@@ -196,7 +196,7 @@ declare %private function empty-helper($hamt)
 {
   $hamt(
     (: Empty :) fn:true#0,
-    (: Seq :) fn:empty#1,
+    (: Leaf :) fn:empty#1,
     (: Index :) fn:fold-left(function($z,$c) { $z and empty-helper($c) },fn:true(),?)
   )
 };
