@@ -160,7 +160,7 @@ declare function describe(
 ) as xs:string
 {
   type-check($hamt),
-  describe-helper($hamt,0)
+  describe-helper($hamt,1)
 };
 
 declare %private function describe-helper($hamt,$indent)
