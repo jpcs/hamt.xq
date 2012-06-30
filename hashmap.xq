@@ -38,7 +38,7 @@ declare %private function value($pair)
 declare %private function hash($a as item()) as xs:integer
 {
   xs:integer(fn:fold-left(
-    function($z,$v) { ($z * 5 + $v) mod 4294967296 },
+    function($z,$v) { (($z + $v) * 8947693) mod 4294967296 },
     2489012344,
     fn:string-to-codepoints(key($a))
   ))
